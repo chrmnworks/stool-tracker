@@ -68,6 +68,11 @@ footer{font-size:.8rem;color:var(--muted);text-align:center}
   <label>Date and time<input type="datetime-local" id="when"></label>
   <label>Notes (optional)<textarea id="notes" placeholder="Anything worth remembering"></textarea></label>
   <button class="primary" id="add" disabled>Save entry</button>
+  <div style="border-top:1px solid var(--line);margin-top:16px;padding-top:14px">
+    <h2>Log a no-stool day</h2>
+    <label>Date<input type="date" id="noStoolDate"></label>
+    <button class="primary" id="addNoStool" type="button">Save no-stool day</button>
+  </div>
   <p class="msg" id="msg" role="status"></p>
 </section>
 
@@ -137,6 +142,21 @@ function syncTypes() {
   $('add').disabled = selected === null;
 }
 
+function addNoStoolDay() {
+  const date = $('noStoolDate').value;
+  if (!date) { $('msg').textContent = 'Choose a date.'; return; }
+  const [year, month, day] = date.split('-').map(Number);
+  const ts = new Date(year, month - 1, day, 12).getTime();
+  if (log.some(e => e.type === 0 && dayKey(e.ts) === date)) {
+    $('msg').textContent = 'A no-stool day is already logged for that date.';
+    return;
+  }
+  log.push({ id: uid(), ts, type: 0, notes: '' });
+  if (!save()) { log.pop(); return; }
+  $('msg').textContent = `Saved no-stool day for ${date}.`;
+  render();
+}
+
 function addEntry() {
   if (selected === null) return;
   const ts = $('when').value ? new Date($('when').value).getTime() : Date.now();
@@ -157,14 +177,14 @@ function remove(id) {
 function render() {
   const sorted = [...log].sort((a, b) => b.ts - a.ts);
   const today = dayKey(Date.now());
-  const n = log.filter(e => dayKey(e.ts) === today).length;
+  const n = log.filter(e => e.type >= 1 && e.type <= 7 && dayKey(e.ts) === today).length;
   $('todayCount').textContent = n;
   $('todayLabel').textContent = n === 1 ? 'entry today' : 'entries today';
 
   // last 7 days
   const days = [];
   for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); days.push(d); }
-  const counts = days.map(d => log.filter(e => dayKey(e.ts) === dayKey(d)).length);
+  const counts = days.map(d => log.filter(e => e.type >= 1 && e.type <= 7 && dayKey(e.ts) === dayKey(d)).length);
   const max = Math.max(1, ...counts);
   const dEl = $('days'); dEl.innerHTML = '';
   days.forEach((d, i) => {
@@ -195,10 +215,18 @@ function render() {
   if (!sorted.length) { ul.innerHTML = '<li><p class="empty">No entries yet. Pick a type above and save your first one.</p></li>'; return; }
   sorted.forEach(e => {
     const li = document.createElement('li');
-    const badge = document.createElement('div'); badge.className = 'badge'; badge.style.setProperty('--c', color(e.type)); badge.innerHTML = `<img src="${IMGS[e.type]}" alt="">`;
+    const badge = document.createElement('div'); badge.className = 'badge';
     const body = document.createElement('div');
     const tm = document.createElement('time');
-    tm.textContent = new Date(e.ts).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' – Type ' + e.type + ', ' + LABELS[e.type];
+    if (e.type === 0) {
+      badge.style.setProperty('--c', 'var(--muted)');
+      badge.textContent = '—';
+      tm.textContent = new Date(e.ts).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ' – No stool recorded';
+    } else {
+      badge.style.setProperty('--c', color(e.type));
+      badge.innerHTML = `<img src="${IMGS[e.type]}" alt="">`;
+      tm.textContent = new Date(e.ts).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' – Type ' + e.type + ', ' + LABELS[e.type];
+    }
     body.appendChild(tm);
     if (e.notes) { const p = document.createElement('p'); p.textContent = e.notes; body.appendChild(p); }
     const del = document.createElement('button'); del.type = 'button'; del.textContent = 'Delete';
@@ -212,6 +240,8 @@ function render() {
 buildTypes();
 $('when').value = nowLocalInput();
 $('add').addEventListener('click', addEntry);
+$('noStoolDate').value = dayKey(Date.now());
+$('addNoStool').addEventListener('click', addNoStoolDay);
 $('range').addEventListener('change', render);
 render();
 </script>
